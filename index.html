@@ -371,6 +371,9 @@
         const STRONG_RATIO = 0.85;  // ボタン幅の約85%以上
         const SNAP_THRESHOLD = 40;  // このpx以上で「開く」スナップ
 
+        // ドラッグ中フラグ（スワイプを無効化するため）
+        let isDraggingCard = false;
+
         // DOMキャッシュ
         const pinnedEl = document.getElementById("pinned");
         const activeEl = document.getElementById("active");
@@ -791,6 +794,11 @@
             let isScrolling = null;    // null=未確定, true=縦スクロール優位, false=横スライド優位
 
             wrap.addEventListener("touchstart", e => {
+                // ドラッグ中はスワイプを無効化
+                if (isDraggingCard) {
+                    return;
+                }
+
                 // ボタンをタップしている場合はスワイプ処理を起動しない
                 if (e.target.closest("button")) {
                     return;
@@ -909,6 +917,9 @@
                 const list = card.parentElement;
                 if (!list) return;
 
+                // ドラッグ開始フラグをON
+                isDraggingCard = true;
+
                 // 初期位置を記録
                 const cardRect = card.getBoundingClientRect();
                 const startY = startEvent.clientY || (startEvent.touches && startEvent.touches[0].clientY);
@@ -994,6 +1005,12 @@
                     placeholder.remove();
 
                     document.body.style.userSelect = "";
+
+                    // ドラッグ終了フラグをOFF（少し遅延させて誤作動防止）
+                    setTimeout(() => {
+                        isDraggingCard = false;
+                    }, 100);
+
                     saveSortOrder();
                 };
 
