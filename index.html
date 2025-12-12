@@ -657,7 +657,6 @@
             const right = document.createElement("div");
             right.className = "actions-right";
             right.append(
-                mkBtn("詳細", () => openDetail(t), "btn-detail"),
                 mkBtn(t.pinned ? "📍解除" : "📍ピン", () => action("toggle_pin", t.id), "btn-pin"),
                 mkBtn("削除", () => {
                     if (t.pinned) return alert("ピンを外してください！");
@@ -754,8 +753,9 @@
             /* ==========================
                 スマホ版 スワイプ
             ========================== */
-            let startX = 0, dx = 0;
+            let startX = 0, startY = 0, dx = 0, dy = 0;
             let isHandleDrag = false;  // ← 追加：☰ から始まったかどうか
+            let isScrolling = null;    // null=未確定, true=縦スクロール優位, false=横スライド優位
 
             wrap.addEventListener("touchstart", e => {
                 // ボタンをタップしている場合はスワイプ処理を起動しない
@@ -772,7 +772,10 @@
                 }
 
                 startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
                 dx = 0;
+                dy = 0;
+                isScrolling = null;  // 方向未確定
                 sl.style.transition = "none";
             }, { passive: true });
 
@@ -782,7 +785,22 @@
                     return;
                 }
                 if (e.touches.length === 0) return;
+
                 dx = e.touches[0].clientX - startX;
+                dy = e.touches[0].clientY - startY;
+
+                // 方向がまだ確定していない場合、一定距離動いたら判定
+                if (isScrolling === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+                    // 縦方向の移動が横方向より大きい場合は縦スクロール優位
+                    isScrolling = Math.abs(dy) > Math.abs(dx);
+                }
+
+                // 縦スクロール優位の場合は横スライドしない
+                if (isScrolling) {
+                    return;
+                }
+
+                // 横スライド優位の場合のみ処理
                 if (Math.abs(dx) > 8) e.preventDefault();
                 sl.style.transform = `translateX(${dx}px)`;
             }, { passive: false });
@@ -791,6 +809,13 @@
                 // ☰ ドラッグだった場合は、スワイプの後処理をしない
                 if (isHandleDrag) {
                     isHandleDrag = false;
+                    sl.style.transition = "";
+                    sl.style.transform = "translateX(0)";
+                    return;
+                }
+
+                // 縦スクロール優位だった場合も横スライドの後処理をスキップ
+                if (isScrolling) {
                     sl.style.transition = "";
                     sl.style.transform = "translateX(0)";
                     return;
