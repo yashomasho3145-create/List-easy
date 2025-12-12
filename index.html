@@ -75,9 +75,22 @@
             }
 
             .card.dragging {
-                opacity: 0.9;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.18);
-                z-index: 5;
+                opacity: 0.95;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+                z-index: 100;
+                transform: scale(1.02);
+                background: #fff;
+            }
+
+            .card.drag-placeholder {
+                background: #f0f0f0;
+                border: 2px dashed #ccc;
+                box-sizing: border-box;
+            }
+
+            .card.drag-placeholder .sl,
+            .card.drag-placeholder .actions-rail {
+                visibility: hidden;
             }
 
         .sl {
@@ -348,7 +361,7 @@
     </div>
 
     <script>
-        const LIFF_ID = "2008372898-2q9qWmxv";
+        const LIFF_ID = "2008277838-gcAH7Vyk";
         const API_BASE = "https://lumicreate.xvps.jp/webhook";
         let userId = null;
         let currentDetailTask = null;
@@ -420,20 +433,46 @@
         ========================== */
         async function init() {
             try {
+                // LIFF SDKが読み込まれているか確認
+                if (typeof liff === "undefined") {
+                    console.error("[INIT] LIFF SDK not loaded");
+                    alert("LIFF SDKの読み込みに失敗しました。ページを再読み込みしてください。");
+                    return;
+                }
+
+                console.log("[INIT] Starting LIFF init with ID:", LIFF_ID);
                 await liff.init({ liffId: LIFF_ID });
+                console.log("[INIT] LIFF initialized successfully");
+
+                // LIFF環境かどうか確認
+                const isInClient = liff.isInClient();
+                console.log("[INIT] isInClient:", isInClient);
+
                 if (!liff.isLoggedIn()) {
+                    console.log("[INIT] Not logged in, redirecting to login...");
                     liff.login();
                     return;
                 }
+
+                console.log("[INIT] Already logged in, getting profile...");
                 const profile = await liff.getProfile();
                 userId = profile.userId;
+                console.log("[INIT] Got userId:", userId);
 
                 bindUI();
                 bindModalUI();
                 await loadList();
             } catch (e) {
-                console.error(e);
-                alert("LIFF初期化に失敗しました");
+                console.error("[INIT] Error:", e);
+                // エラーの詳細を表示
+                let errorMsg = "LIFF初期化に失敗しました。\n";
+                if (e.code) {
+                    errorMsg += `エラーコード: ${e.code}\n`;
+                }
+                if (e.message) {
+                    errorMsg += `詳細: ${e.message}`;
+                }
+                alert(errorMsg);
             }
         }
 
@@ -712,13 +751,7 @@
                 wrap.dataset.rightWidth = rRect.width || 140;
             });
 
-            let holdTimer = null;
-            handle.addEventListener("pointerdown", e => {
-                holdTimer = setTimeout(() => startDrag(e), 500);
-            });
-
-            handle.addEventListener("pointerup", () => clearTimeout(holdTimer));
-            handle.addEventListener("pointerleave", () => clearTimeout(holdTimer));
+            // ドラッグ開始用のタイマーは不要（即座にドラッグ開始）
 
 
             /* ==========================
@@ -866,7 +899,7 @@
             });
 
             /* ==========================
-                ☰ で並び替え（ドラッグ）
+                ☰ で並び替え（ドラッグ） - 改善版
             ========================== */
             const startDrag = (startEvent) => {
                 startEvent.preventDefault();
@@ -876,60 +909,110 @@
                 const list = card.parentElement;
                 if (!list) return;
 
+                // 初期位置を記録
+                const cardRect = card.getBoundingClientRect();
+                const startY = startEvent.clientY || (startEvent.touches && startEvent.touches[0].clientY);
+                const cardStartTop = cardRect.top;
+                const cardHeight = cardRect.height;
+
+                // プレースホルダーを作成（元の位置を示す）
+                const placeholder = document.createElement("div");
+                placeholder.className = "card drag-placeholder";
+                placeholder.style.height = cardHeight + "px";
+                list.insertBefore(placeholder, card);
+
+                // カードを浮かせる（position: fixed で画面に固定）
                 card.classList.add("dragging");
+                card.style.position = "fixed";
+                card.style.left = cardRect.left + "px";
+                card.style.top = cardRect.top + "px";
+                card.style.width = cardRect.width + "px";
+                card.style.height = cardHeight + "px";
+                card.style.pointerEvents = "none";
+
                 document.body.style.userSelect = "none";
+                document.body.appendChild(card); // bodyに移動して最前面に
 
-                const pointerId = startEvent.pointerId;
-
-                const getY = (ev) => ev.clientY;
+                const getY = (ev) => {
+                    if (ev.touches && ev.touches.length > 0) {
+                        return ev.touches[0].clientY;
+                    }
+                    return ev.clientY;
+                };
 
                 const onMove = (ev) => {
-                    const y = getY(ev);
-                    const siblings = Array.from(list.children);
-                    const currentIndex = siblings.indexOf(card);
-                    if (currentIndex === -1) return;
+                    const currentY = getY(ev);
+                    const deltaY = currentY - startY;
 
-                    const prev = siblings[currentIndex - 1];
-                    const next = siblings[currentIndex + 1];
+                    // カードを指に追従させる
+                    card.style.top = (cardStartTop + deltaY) + "px";
 
-                    if (prev) {
-                        const rect = prev.getBoundingClientRect();
-                        if (y < rect.top + rect.height / 2) {
-                            list.insertBefore(card, prev);
+                    // プレースホルダーの位置を更新
+                    const cardCenterY = cardStartTop + deltaY + cardHeight / 2;
+
+                    // 同じリスト内の全カード（プレースホルダー以外）をチェック
+                    const siblings = Array.from(list.querySelectorAll(".card:not(.dragging)"));
+
+                    for (let i = 0; i < siblings.length; i++) {
+                        const sibling = siblings[i];
+                        if (sibling === placeholder) continue;
+
+                        const siblingRect = sibling.getBoundingClientRect();
+                        const siblingCenterY = siblingRect.top + siblingRect.height / 2;
+
+                        // カードの中心がsiblingの中心より上なら、その前に移動
+                        if (cardCenterY < siblingCenterY) {
+                            if (placeholder.nextSibling !== sibling) {
+                                list.insertBefore(placeholder, sibling);
+                            }
                             return;
                         }
                     }
-                    if (next) {
-                        const rect = next.getBoundingClientRect();
-                        if (y > rect.top + rect.height / 2) {
-                            list.insertBefore(next, card);
-                            return;
-                        }
+
+                    // 全てのカードより下なら、最後に移動
+                    if (placeholder.nextSibling !== null) {
+                        list.appendChild(placeholder);
                     }
                 };
 
-                const onUp = (ev) => {
+                const onUp = () => {
                     document.removeEventListener("pointermove", onMove);
                     document.removeEventListener("pointerup", onUp);
+                    document.removeEventListener("touchmove", onMove);
+                    document.removeEventListener("touchend", onUp);
+
+                    // カードをプレースホルダーの位置に挿入
                     card.classList.remove("dragging");
+                    card.style.position = "";
+                    card.style.left = "";
+                    card.style.top = "";
+                    card.style.width = "";
+                    card.style.height = "";
+                    card.style.pointerEvents = "";
+
+                    list.insertBefore(card, placeholder);
+                    placeholder.remove();
+
                     document.body.style.userSelect = "";
                     saveSortOrder();
                 };
 
                 document.addEventListener("pointermove", onMove);
                 document.addEventListener("pointerup", onUp);
+                document.addEventListener("touchmove", onMove, { passive: false });
+                document.addEventListener("touchend", onUp);
             };
 
-            if (window.PointerEvent) {
-                handle.addEventListener("pointerdown", startDrag);
-            } else {
-                // pointer未対応ブラウザ用のフォールバック（必要なら）
-                handle.addEventListener("touchstart", (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    // ここで同様のロジックを実装してもOK（簡略のため省略）
-                }, { passive: false });
-            }
+            // PointerEventとTouchEventの両方をサポート
+            handle.addEventListener("pointerdown", (e) => {
+                e.preventDefault();
+                startDrag(e);
+            });
+            handle.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startDrag(e);
+            }, { passive: false });
 
             // 並び替え用にタスク情報を紐付け
             // 並び替え用にタスク情報を紐付け
