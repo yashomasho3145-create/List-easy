@@ -1,0 +1,449 @@
+/* ============================================
+   筋トレフォーム分析ツール - スタイルシート
+   ============================================ */
+
+/* リセット & 基本設定 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #ffffff;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* ヘッダー */
+.header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.header h1 {
+    font-size: 2rem;
+    color: #00ff88;
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+.subtitle {
+    color: #aaa;
+    font-size: 0.9rem;
+    margin-top: 5px;
+}
+
+/* メインコンテンツ */
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+}
+
+@media (max-width: 900px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ビデオコンテナ */
+.video-container {
+    position: relative;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+}
+
+#video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* 鏡像表示 */
+}
+
+#canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform: scaleX(-1); /* 鏡像表示 */
+}
+
+/* オーバーレイ情報 */
+.overlay-info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+}
+
+.info-item {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.info-item .label {
+    color: #aaa;
+    margin-right: 8px;
+}
+
+.info-item.mode span:last-child {
+    color: #00ffff;
+    font-weight: bold;
+}
+
+.info-item.exercise span:last-child {
+    color: #ffff00;
+    font-weight: bold;
+}
+
+.info-item.count {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #00ff00;
+    background: rgba(0, 80, 0, 0.8);
+}
+
+#targetDisplay {
+    font-size: 1rem;
+    color: #aaa;
+    margin-left: 10px;
+}
+
+.info-item.stage span:last-child,
+.info-item.angle span:last-child,
+.info-item.reps-recorded span:last-child {
+    color: #ccc;
+}
+
+/* 右上ステータス */
+.status-indicators {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+}
+
+.status-item {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    text-align: right;
+}
+
+.status-item .label {
+    color: #aaa;
+    margin-right: 6px;
+}
+
+.status-on {
+    color: #00ff00;
+    font-weight: bold;
+}
+
+.status-off {
+    color: #ff4444;
+    font-weight: bold;
+}
+
+/* ローディングオーバーレイ */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.loading-overlay.hidden {
+    display: none;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #333;
+    border-top-color: #00ff88;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+    margin-top: 15px;
+    color: #aaa;
+}
+
+/* コントロールパネル */
+.control-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.control-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.control-section h3 {
+    font-size: 0.9rem;
+    color: #888;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ボタン */
+.btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #333;
+    color: #fff;
+}
+
+.btn:hover {
+    background: #444;
+    transform: translateY(-1px);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn.active {
+    background: #00ff88;
+    color: #000;
+}
+
+.btn-mode {
+    background: #2a4a6a;
+}
+
+.btn-mode.active {
+    background: #00ffff;
+    color: #000;
+}
+
+.btn-exercise {
+    background: #4a4a2a;
+}
+
+.btn-exercise.active {
+    background: #ffff00;
+    color: #000;
+}
+
+.btn-action {
+    background: #3a3a3a;
+}
+
+.btn-action.active {
+    background: #00ff00;
+    color: #000;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+    color: #000;
+    font-weight: bold;
+    width: 100%;
+    padding: 14px;
+    font-size: 1rem;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #00ffaa 0%, #00dd77 100%);
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+/* 設定項目 */
+.setting-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.setting-item:last-child {
+    margin-bottom: 0;
+}
+
+.setting-item label {
+    font-size: 0.85rem;
+    color: #aaa;
+    min-width: 80px;
+}
+
+.setting-item input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    background: #222;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.setting-item input:focus {
+    outline: none;
+    border-color: #00ff88;
+}
+
+.setting-item input[type="number"] {
+    width: 80px;
+    flex: none;
+}
+
+/* 評価パネル */
+.evaluation-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 2px solid #00ff88;
+    border-radius: 16px;
+    padding: 30px;
+    max-width: 500px;
+    width: 90%;
+    z-index: 1000;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.evaluation-panel h3 {
+    color: #00ff88;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.evaluation-content {
+    margin-bottom: 20px;
+}
+
+.score-display {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.score-label {
+    color: #aaa;
+    margin-right: 10px;
+}
+
+.score-value {
+    font-size: 3rem;
+    font-weight: bold;
+    color: #00ff88;
+}
+
+.score-max {
+    font-size: 1.5rem;
+    color: #666;
+}
+
+.comment-display {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 8px;
+    line-height: 1.6;
+}
+
+.comment-display p {
+    color: #ddd;
+    white-space: pre-wrap;
+}
+
+/* フッター */
+.footer {
+    margin-top: 20px;
+    text-align: center;
+    color: #666;
+    font-size: 0.85rem;
+}
+
+/* オーバーレイ背景 */
+.overlay-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 999;
+}
+
+/* スマホ対応 */
+@media (max-width: 600px) {
+    .header h1 {
+        font-size: 1.5rem;
+    }
+
+    .info-item.count {
+        font-size: 1.5rem;
+    }
+
+    .control-section {
+        padding: 12px;
+    }
+
+    .btn {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+    }
+
+    .evaluation-panel {
+        padding: 20px;
+    }
+
+    .score-value {
+        font-size: 2.5rem;
+    }
+}
