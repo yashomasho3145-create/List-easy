@@ -317,7 +317,7 @@ Deno.serve(async (req: Request) => {
         if (replyToken && inserted?.id) {
           await replyLine(replyToken, [{
             type: 'text',
-            text: `『${text}』をリストに追加したよ！\nリマインドはいつにする？👇`,
+            text: `リストに追加したよ！\nリマインドはいつにする？👇`,
             quickReply: remindQuickReply(inserted.id, true),
           }]);
         }
@@ -384,7 +384,7 @@ Deno.serve(async (req: Request) => {
         if (replyToken && inserted?.id) {
           await replyLine(replyToken, [{
             type: 'text',
-            text: `『${text}』をリストに追加したよ！\nリマインドはいつにする？👇`,
+            text: `リストに追加したよ！\nリマインドはいつにする？👇`,
             quickReply: remindQuickReply(inserted.id, false),
           }]);
         }

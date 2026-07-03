@@ -139,6 +139,10 @@ class JournalSwipeRow {
             this.sl.style.transition = `transform ${SNAP_MS}ms ${ease}`;
             this.sl.style.transform  = `translateX(${target}px)`;
         }
+        if (target === 0 && this.currentX !== 0) {
+            this._suppressNextClick = true;
+            setTimeout(() => { this._suppressNextClick = false; }, SNAP_MS + 200);
+        }
         this.currentX = target;
         if (this.jright) {
             this.jright.style.transition = `width ${SNAP_MS}ms ${ease}`;
@@ -150,7 +154,8 @@ class JournalSwipeRow {
     _onClick(e) {
         if (this.hasMoved) { e.preventDefault(); e.stopPropagation(); return; }
         if (e.target.closest('button')) return;
-        if (this.currentX !== 0) { e.preventDefault(); e.stopPropagation(); this.close(); }
+        if (this.currentX !== 0) { e.preventDefault(); e.stopPropagation(); this.close(); return; }
+        if (this._suppressNextClick) { e.preventDefault(); e.stopPropagation(); return; }
     }
 
     destroy() {

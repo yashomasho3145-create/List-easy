@@ -242,13 +242,14 @@ function bindUI() {
     bindHabitSettingsModalUI();
     bindAddTaskModalUI();
     initPullToRefresh();
+    initTabSwipe();
 }
 
 /**
  * プルリフレッシュ初期化（SVGアーク版）
  */
 function initPullToRefresh() {
-    const THRESHOLD = 72;
+    const THRESHOLD = 100;
     const SNAP_MS   = 350;
     const EASE      = 'cubic-bezier(0.25,0.46,0.45,0.94)';
 
@@ -291,9 +292,11 @@ function initPullToRefresh() {
         setTimeout(() => { ptr.style.transition = ''; }, SNAP_MS + 50);
     }
 
+    let startX = 0;
     container.addEventListener('touchstart', e => {
         if (isRefreshing || window._treeViewActive) return;
         if (container.scrollTop > 0) return;
+        startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;
         isPulling = false;
         startedScroll = false;
@@ -303,9 +306,10 @@ function initPullToRefresh() {
     container.addEventListener('touchmove', e => {
         if (isRefreshing || !startY) return;
         const dy = e.touches[0].clientY - startY;
-        if (!startedScroll && Math.abs(dy) < 6) return;
+        const dx = e.touches[0].clientX - startX;
+        if (!startedScroll && Math.abs(dy) < 12) return;
         startedScroll = true;
-        if (dy <= 0) {
+        if (dy <= 0 || Math.abs(dx) > Math.abs(dy) * 0.8) {
             if (isPulling) resetPtr();
             isPulling = false;
             return;
@@ -344,6 +348,55 @@ function initPullToRefresh() {
         resetPtr();
         pullY = 0;
         setTimeout(() => { isRefreshing = false; }, SNAP_MS + 60);
+    }, { passive: true });
+}
+
+/**
+ * タブ間スワイプ移動
+ */
+function initTabSwipe() {
+    const TAB_ORDER = ['list', 'status', 'journal'];
+    const THRESHOLD = 70;
+    const container = document.querySelector('.tab-contents');
+    if (!container) return;
+
+    let sx = 0, sy = 0, locked = null, active = false;
+
+    container.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) return;
+        // journal-swipe-wrap の中から始まるスワイプは除外
+        if (e.target.closest('.journal-swipe-wrap, .template-carousel, canvas')) return;
+        sx = e.touches[0].clientX;
+        sy = e.touches[0].clientY;
+        locked = null;
+        active = true;
+    }, { passive: true });
+
+    container.addEventListener('touchmove', e => {
+        if (!active || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - sx;
+        const dy = e.touches[0].clientY - sy;
+        if (locked === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+            locked = Math.abs(dx) > Math.abs(dy) * 1.1 ? 'h' : 'v';
+        }
+        if (locked === 'v') active = false;
+    }, { passive: true });
+
+    container.addEventListener('touchend', e => {
+        if (!active || locked !== 'h') { active = false; return; }
+        const dx = e.changedTouches[0].clientX - sx;
+        active = false;
+        if (Math.abs(dx) < THRESHOLD) return;
+        if (document.querySelector('.journal-fullscreen-modal.visible')) return;
+        if (document.querySelector('.modal-root.visible, .mbti-modal.visible')) return;
+        if (window._treeViewActive) return;
+
+        const curTab = document.querySelector('.tab-nav-item.active')?.dataset.tab;
+        const curIdx = TAB_ORDER.indexOf(curTab);
+        if (curIdx < 0) return;
+        const nextIdx = dx < 0 ? curIdx + 1 : curIdx - 1;
+        if (nextIdx < 0 || nextIdx >= TAB_ORDER.length) return;
+        if (typeof switchTab === 'function') switchTab(TAB_ORDER[nextIdx]);
     }, { passive: true });
 }
 
