@@ -241,115 +241,157 @@ function bindUI() {
     bindUpgradeModalUI();
     bindHabitSettingsModalUI();
     bindAddTaskModalUI();
-    initPullToRefresh();
-    initTabSwipe();
+    initGestureCoordinator();
 }
 
 /**
- * プルリフレッシュ初期化（SVGアーク版）
+ * ジェスチャーコーディネーター
+ * PTR・ページャー・ネイティブスクロールを単一ハンドラーで統一管理し競合を排除
  */
-function initPullToRefresh() {
-    const THRESHOLD = 100;
+function initGestureCoordinator() {
+    const outer = document.querySelector('.tab-pager-outer');
+    const ptr   = document.getElementById('pullRefreshIndicator');
+    if (!outer) return;
+
+    /* ── PTRインジケーター セットアップ ── */
+    const PULL_THR  = 100;
     const SNAP_MS   = 350;
-    const EASE      = 'cubic-bezier(0.25,0.46,0.45,0.94)';
+    const SNAP_EASE = 'cubic-bezier(0.25,0.46,0.45,0.94)';
 
-    const ptr = document.getElementById('pullRefreshIndicator');
-    const container = document.querySelector('.tab-pager-outer');
-    if (!ptr || !container) return;
+    if (ptr) {
+        ptr.innerHTML = `
+            <div class="ptr-circle">
+                <svg class="ptr-svg" viewBox="0 0 28 28" width="28" height="28">
+                    <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,159,67,0.22)" stroke-width="2.8"/>
+                    <circle class="ptr-arc" cx="14" cy="14" r="11" fill="none"
+                        stroke="#ff9f43" stroke-width="2.8" stroke-linecap="round"
+                        stroke-dasharray="0 69.1" transform="rotate(-90 14 14)"/>
+                </svg>
+            </div>
+            <span class="ptr-label">引っ張って更新</span>`;
+    }
 
-    // SVGアーク式インジケーターに差し替え
-    ptr.innerHTML = `
-        <div class="ptr-circle">
-            <svg class="ptr-svg" viewBox="0 0 28 28" width="28" height="28">
-                <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,159,67,0.22)" stroke-width="2.8"/>
-                <circle class="ptr-arc" cx="14" cy="14" r="11" fill="none"
-                    stroke="#ff9f43" stroke-width="2.8" stroke-linecap="round"
-                    stroke-dasharray="0 69.1" transform="rotate(-90 14 14)"/>
-            </svg>
-        </div>
-        <span class="ptr-label">引っ張って更新</span>`;
-
-    const arc = ptr.querySelector('.ptr-arc');
+    const arc = ptr?.querySelector('.ptr-arc');
     const C   = 2 * Math.PI * 11;
-
-    let startY       = 0;
-    let pullY        = 0;
-    let isPulling    = false;
-    let isRefreshing = false;
-    let startedScroll = false;
+    let ptrY = 0, isRefreshing = false;
 
     function setPtr(offset, progress, label) {
-        ptr.style.transform = `translateY(${offset - THRESHOLD}px)`;
+        if (!ptr) return;
+        ptr.style.transform = `translateY(${offset - PULL_THR}px)`;
         ptr.style.opacity   = String(Math.min(progress * 1.5, 1));
-        arc.setAttribute('stroke-dasharray', `${C * Math.min(progress, 1)} ${C}`);
-        if (label) ptr.querySelector('.ptr-label').textContent = label;
+        if (arc) arc.setAttribute('stroke-dasharray', `${C * Math.min(progress, 1)} ${C}`);
+        const lbl = ptr.querySelector('.ptr-label');
+        if (lbl && label) lbl.textContent = label;
     }
 
     function resetPtr() {
-        ptr.style.transition = `transform ${SNAP_MS}ms ${EASE}, opacity 280ms ease`;
+        if (!ptr) return;
+        ptr.style.transition = `transform ${SNAP_MS}ms ${SNAP_EASE}, opacity 280ms ease`;
         setPtr(0, 0, '引っ張って更新');
         ptr.classList.remove('ptr-ready', 'ptr-refreshing');
-        setTimeout(() => { ptr.style.transition = ''; }, SNAP_MS + 50);
+        setTimeout(() => { if (ptr) ptr.style.transition = ''; }, SNAP_MS + 50);
     }
 
-    let startX = 0;
-    container.addEventListener('touchstart', e => {
-        if (isRefreshing || window._treeViewActive) return;
-        const _activeTab = document.querySelector('.tab-content.active');
-        if (_activeTab && _activeTab.scrollTop > 0) return;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        isPulling = false;
-        startedScroll = false;
-        pullY = 0;
+    /* ── ジェスチャー共有状態 ──
+       lock: null=判定中 / 'pager'=ページャー / 'ptr'=プルリフレッシュ / 'scroll'=ネイティブ */
+    const _g = { active: false, lock: null, sx: 0, sy: 0, t0: 0 };
+
+    outer.addEventListener('touchstart', e => {
+        if (isRefreshing || e.touches.length !== 1) return;
+        if (document.querySelector('.journal-fullscreen-modal.visible')) return;
+        if (document.querySelector('.modal-root.visible')) return;
+        if (window._treeViewActive) return;
+        // カード・ジャーナルスワイプ・カルーセル・canvas は自身のイベントで処理
+        if (e.target.closest('.card, .journal-swipe-wrap, .template-carousel, canvas')) return;
+        _g.sx = e.touches[0].clientX;
+        _g.sy = e.touches[0].clientY;
+        _g.t0 = Date.now();
+        _g.lock = null;
+        _g.active = true;
+        ptrY = 0;
     }, { passive: true });
 
-    container.addEventListener('touchmove', e => {
-        if (isRefreshing || !startY) return;
-        const dy = e.touches[0].clientY - startY;
-        const dx = e.touches[0].clientX - startX;
-        if (!startedScroll && Math.abs(dy) < 12) return;
-        startedScroll = true;
-        if (dy <= 0 || Math.abs(dx) > Math.abs(dy) * 0.8) {
-            if (isPulling) resetPtr();
-            isPulling = false;
+    outer.addEventListener('touchmove', e => {
+        if (!_g.active || e.touches.length !== 1) return;
+        const dx    = e.touches[0].clientX - _g.sx;
+        const dy    = e.touches[0].clientY - _g.sy;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+
+        /* ── 方向確定（10px 以上動いてから一度だけ判断）── */
+        if (_g.lock === null) {
+            if (absDx < 10 && absDy < 10) return;
+            // カードスワイプと同じ閾値(LOCK_ANGLE_RATIO=1.2)で統一
+            _g.lock = absDx > absDy * SWIPE_CONFIG.LOCK_ANGLE_RATIO
+                ? 'pager'
+                : (dy > 0 && (document.querySelector('.tab-content.active')?.scrollTop ?? 0) === 0 ? 'ptr' : 'scroll');
+        }
+
+        /* ── ページャー: ライブドラッグ ── */
+        if (_g.lock === 'pager') {
+            const n = _TAB_ORDER.length;
+            let cdx = dx;
+            if (_tabPager.index === 0 && dx > 0) cdx = dx * 0.18;
+            if (_tabPager.index === n - 1 && dx < 0) cdx = dx * 0.18;
+            _pagerSetProgress(_tabPager.index, cdx);
             return;
         }
-        isPulling = true;
-        pullY = dy;
-        const clamped  = Math.min(dy * 0.46, THRESHOLD * 1.2);
-        const progress = clamped / THRESHOLD;
-        const label    = progress >= 1 ? '放して更新 ↑' : '引っ張って更新';
-        ptr.style.transition = 'none';
-        setPtr(clamped, progress, label);
-        ptr.classList.toggle('ptr-ready', progress >= 1);
-        if (e.cancelable) e.preventDefault();
+
+        /* ── PTR: インジケーター更新 ── */
+        if (_g.lock === 'ptr') {
+            ptrY = dy;
+            const clamped  = Math.min(dy * 0.46, PULL_THR * 1.2);
+            const progress = clamped / PULL_THR;
+            if (ptr) ptr.style.transition = 'none';
+            setPtr(clamped, progress, progress >= 1 ? '放して更新 ↑' : '引っ張って更新');
+            if (ptr) ptr.classList.toggle('ptr-ready', progress >= 1);
+            if (e.cancelable) e.preventDefault();
+        }
+        // 'scroll': ネイティブスクロールに委ねる（何もしない）
     }, { passive: false });
 
-    container.addEventListener('touchend', async () => {
-        if (!isPulling) return;
-        isPulling = false;
-        const clamped = Math.min(pullY * 0.46, THRESHOLD * 1.2);
-        if (clamped < THRESHOLD) {
-            resetPtr();
-            pullY = 0;
+    outer.addEventListener('touchend', async e => {
+        if (!_g.active) return;
+        _g.active = false;
+
+        /* ── ページャースナップ ── */
+        if (_g.lock === 'pager') {
+            const dx  = e.changedTouches[0].clientX - _g.sx;
+            const vel = dx / Math.max(1, Date.now() - _g.t0);
+            const n   = _TAB_ORDER.length;
+            let nxt   = _tabPager.index;
+            const THR = window.innerWidth * 0.3;
+            if ((dx < -THR || vel < -0.3) && _tabPager.index < n - 1) nxt = _tabPager.index + 1;
+            else if ((dx > THR || vel > 0.3) && _tabPager.index > 0)  nxt = _tabPager.index - 1;
+            _pagerSetIndex(nxt, true);
+            if (nxt !== _tabPager.index) { _tabPager.index = nxt; switchTab(_TAB_ORDER[nxt]); }
             return;
         }
-        isRefreshing = true;
-        ptr.classList.add('ptr-refreshing');
-        ptr.classList.remove('ptr-ready');
-        ptr.style.transition = `transform ${SNAP_MS}ms ${EASE}`;
-        ptr.style.transform  = `translateY(0)`;
-        ptr.querySelector('.ptr-label').textContent = '更新中…';
-        arc.setAttribute('stroke-dasharray', `${C} 0`);
-        try {
-            await refreshActiveTab();
-        } catch (_) {}
-        await new Promise(r => setTimeout(r, 420));
-        resetPtr();
-        pullY = 0;
-        setTimeout(() => { isRefreshing = false; }, SNAP_MS + 60);
+
+        /* ── PTRリリース ── */
+        if (_g.lock === 'ptr') {
+            const clamped = Math.min(ptrY * 0.46, PULL_THR * 1.2);
+            if (clamped < PULL_THR) { resetPtr(); ptrY = 0; return; }
+            isRefreshing = true;
+            if (ptr) {
+                ptr.classList.add('ptr-refreshing');
+                ptr.classList.remove('ptr-ready');
+                ptr.style.transition = `transform ${SNAP_MS}ms ${SNAP_EASE}`;
+                ptr.style.transform  = 'translateY(0)';
+                const lbl = ptr.querySelector('.ptr-label');
+                if (lbl) lbl.textContent = '更新中…';
+                if (arc) arc.setAttribute('stroke-dasharray', `${C} 0`);
+            }
+            try { await refreshActiveTab(); } catch (_) {}
+            await new Promise(r => setTimeout(r, 420));
+            resetPtr();
+            ptrY = 0;
+            setTimeout(() => { isRefreshing = false; }, SNAP_MS + 60);
+        }
     }, { passive: true });
+
+    // 初期ページャー位置を確定（アニメなし）
+    _pagerSetIndex(_tabPager.index, false);
 }
 
 /* ===== Xスタイル全画面ページャー ===== */
@@ -384,63 +426,6 @@ function _pagerSetProgress(idx, dx) {
     }
 }
 
-/**
- * Xスタイル全画面ページャースワイプ初期化
- */
-function initTabSwipe() {
-    const container = document.querySelector('.tab-pager-outer');
-    if (!container) return;
-    const state = _tabPager;
-
-    container.addEventListener('touchstart', e => {
-        if (e.touches.length !== 1) return;
-        if (document.querySelector('.journal-fullscreen-modal.visible')) return;
-        if (document.querySelector('.modal-root.visible')) return;
-        if (window._treeViewActive) return;
-        if (e.target.closest('.card, .journal-swipe-wrap, .template-carousel, canvas')) return;
-        state.sx = e.touches[0].clientX;
-        state.sy = e.touches[0].clientY;
-        state.startTime = Date.now();
-        state.locked = null;
-        state.active = true;
-    }, { passive: true });
-
-    container.addEventListener('touchmove', e => {
-        if (!state.active || e.touches.length !== 1) return;
-        const dx = e.touches[0].clientX - state.sx;
-        const dy = e.touches[0].clientY - state.sy;
-        if (state.locked === null) {
-            if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-            state.locked = Math.abs(dx) > Math.abs(dy) * 0.7 ? 'h' : 'v';
-        }
-        if (state.locked === 'v') { state.active = false; return; }
-        const n = _TAB_ORDER.length;
-        let clampedDx = dx;
-        if (state.index === 0 && dx > 0) clampedDx = dx * 0.18;
-        if (state.index === n - 1 && dx < 0) clampedDx = dx * 0.18;
-        _pagerSetProgress(state.index, clampedDx);
-    }, { passive: true });
-
-    container.addEventListener('touchend', e => {
-        if (!state.active || state.locked !== 'h') { state.active = false; return; }
-        const dx   = e.changedTouches[0].clientX - state.sx;
-        const vel  = dx / Math.max(1, Date.now() - state.startTime);
-        state.active = false;
-        const n = _TAB_ORDER.length;
-        let nextIdx = state.index;
-        const THR = window.innerWidth * 0.3;
-        if ((dx < -THR || vel < -0.3) && state.index < n - 1) nextIdx = state.index + 1;
-        else if ((dx > THR || vel > 0.3) && state.index > 0)  nextIdx = state.index - 1;
-        _pagerSetIndex(nextIdx, true);
-        if (nextIdx !== state.index) {
-            state.index = nextIdx;
-            switchTab(_TAB_ORDER[nextIdx]);
-        }
-    }, { passive: true });
-
-    // 初期位置を確定（アニメなし）
-    _pagerSetIndex(state.index, false);
-}
 
 async function refreshActiveTab() {
     const activeTab = document.querySelector('.tab-nav-item.active')?.dataset.tab;
