@@ -254,7 +254,7 @@ function initPullToRefresh() {
     const EASE      = 'cubic-bezier(0.25,0.46,0.45,0.94)';
 
     const ptr = document.getElementById('pullRefreshIndicator');
-    const container = document.querySelector('.tab-contents');
+    const container = document.querySelector('.tab-pager-outer');
     if (!ptr || !container) return;
 
     // SVGアーク式インジケーターに差し替え
@@ -295,7 +295,8 @@ function initPullToRefresh() {
     let startX = 0;
     container.addEventListener('touchstart', e => {
         if (isRefreshing || window._treeViewActive) return;
-        if (container.scrollTop > 0) return;
+        const _activeTab = document.querySelector('.tab-content.active');
+        if (_activeTab && _activeTab.scrollTop > 0) return;
         startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;
         isPulling = false;
@@ -351,116 +352,94 @@ function initPullToRefresh() {
     }, { passive: true });
 }
 
-let _tabAnimating = false;
+/* ===== Xスタイル全画面ページャー ===== */
+const _TAB_ORDER  = ['list', 'status', 'journal'];
+const _PAGER_EASE = 'cubic-bezier(0.32,0.72,0,1)';
+const _PAGER_DUR  = '0.32s';
+const _tabPager   = { index: 0, active: false, sx: 0, sy: 0, startTime: 0, locked: null };
 
-/**
- * タブ間スワイプ移動（画面端のみ発動 · iOS スライドアニメ）
- */
-function initTabSwipe() {
-    const TAB_ORDER = ['list', 'status', 'journal'];
-    const EDGE_ZONE = 28;  // 画面端からこのpx以内のみ発動
-    const THRESHOLD = 52;  // 発動に必要な最小ドラッグ距離
-    const container = document.querySelector('.tab-contents');
-    if (!container) return;
+function _pagerSetIndex(idx, animated) {
+    const W   = window.innerWidth;
+    const el  = document.querySelector('.tab-contents');
+    const ind = document.querySelector('.tab-nav-indicator');
+    if (!el) return;
+    el.style.transition  = animated ? `transform ${_PAGER_DUR} ${_PAGER_EASE}` : 'none';
+    el.style.transform   = `translateX(${-idx * W}px)`;
+    if (ind) {
+        ind.style.transition = animated ? `transform ${_PAGER_DUR} ${_PAGER_EASE}` : 'none';
+        ind.style.transform  = `translateX(${idx * 100}%)`;
+    }
+}
 
-    let sx = 0, sy = 0, locked = null, active = false;
-
-    container.addEventListener('touchstart', e => {
-        if (_tabAnimating || e.touches.length !== 1) return;
-        if (document.querySelector('.journal-fullscreen-modal.visible')) return;
-        if (document.querySelector('.modal-root.visible')) return;
-        if (window._treeViewActive) return;
-
-        const tx = e.touches[0].clientX;
-        const W  = window.innerWidth;
-        if (tx > EDGE_ZONE && tx < W - EDGE_ZONE) return; // 端以外は無視
-
-        sx = tx; sy = e.touches[0].clientY;
-        locked = null; active = true;
-    }, { passive: true });
-
-    container.addEventListener('touchmove', e => {
-        if (!active || e.touches.length !== 1) return;
-        const dx = e.touches[0].clientX - sx;
-        const dy = e.touches[0].clientY - sy;
-        if (locked === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-            locked = Math.abs(dx) > Math.abs(dy) * 0.75 ? 'h' : 'v';
-        }
-        if (locked === 'v') active = false;
-    }, { passive: true });
-
-    container.addEventListener('touchend', e => {
-        if (!active || locked !== 'h') { active = false; return; }
-        const dx = e.changedTouches[0].clientX - sx;
-        active = false;
-        if (Math.abs(dx) < THRESHOLD) return;
-
-        const isLeft  = sx < EDGE_ZONE;          // 左端から開始
-        const isRight = sx > window.innerWidth - EDGE_ZONE; // 右端から開始
-        const goLeft  = dx < 0;                  // 指が左へ移動 = 次タブ
-
-        if (isLeft  &&  goLeft) return; // 左端から左スワイプは無効
-        if (isRight && !goLeft) return; // 右端から右スワイプは無効
-
-        const curTab = document.querySelector('.tab-nav-item.active')?.dataset.tab;
-        const curIdx = TAB_ORDER.indexOf(curTab);
-        if (curIdx < 0) return;
-        const nextIdx = goLeft ? curIdx + 1 : curIdx - 1;
-        if (nextIdx < 0 || nextIdx >= TAB_ORDER.length) return;
-
-        _switchTabAnimated(curTab, TAB_ORDER[nextIdx], goLeft ? 'left' : 'right');
-    }, { passive: true });
+function _pagerSetProgress(idx, dx) {
+    const W   = window.innerWidth;
+    const el  = document.querySelector('.tab-contents');
+    const ind = document.querySelector('.tab-nav-indicator');
+    if (!el) return;
+    el.style.transition = 'none';
+    el.style.transform  = `translateX(${-idx * W + dx}px)`;
+    if (ind) {
+        ind.style.transition = 'none';
+        ind.style.transform  = `translateX(${(idx - dx / W) * 100}%)`;
+    }
 }
 
 /**
- * iOS風タブスライドアニメーション
+ * Xスタイル全画面ページャースワイプ初期化
  */
-function _switchTabAnimated(fromId, toId, direction) {
-    if (_tabAnimating) return;
-    _tabAnimating = true;
+function initTabSwipe() {
+    const container = document.querySelector('.tab-pager-outer');
+    if (!container) return;
+    const state = _tabPager;
 
-    const container = document.querySelector('.tab-contents');
-    const fromEl    = document.getElementById(`tab-${fromId}`);
-    const toEl      = document.getElementById(`tab-${toId}`);
-    if (!fromEl || !toEl || !container) {
-        _tabAnimating = false; switchTab(toId); return;
-    }
+    container.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) return;
+        if (document.querySelector('.journal-fullscreen-modal.visible')) return;
+        if (document.querySelector('.modal-root.visible')) return;
+        if (window._treeViewActive) return;
+        if (e.target.closest('.card, .journal-swipe-wrap, .template-carousel, canvas')) return;
+        state.sx = e.touches[0].clientX;
+        state.sy = e.touches[0].clientY;
+        state.startTime = Date.now();
+        state.locked = null;
+        state.active = true;
+    }, { passive: true });
 
-    const W    = container.offsetWidth;
-    const H    = container.offsetHeight;
-    const ease = 'cubic-bezier(0.32,0.72,0,1)';
-    const dur  = 310;
+    container.addEventListener('touchmove', e => {
+        if (!state.active || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - state.sx;
+        const dy = e.touches[0].clientY - state.sy;
+        if (state.locked === null) {
+            if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+            state.locked = Math.abs(dx) > Math.abs(dy) * 0.7 ? 'h' : 'v';
+        }
+        if (state.locked === 'v') { state.active = false; return; }
+        const n = _TAB_ORDER.length;
+        let clampedDx = dx;
+        if (state.index === 0 && dx > 0) clampedDx = dx * 0.18;
+        if (state.index === n - 1 && dx < 0) clampedDx = dx * 0.18;
+        _pagerSetProgress(state.index, clampedDx);
+    }, { passive: true });
 
-    container.style.overflow = 'hidden'; // スクロール抑制
+    container.addEventListener('touchend', e => {
+        if (!state.active || state.locked !== 'h') { state.active = false; return; }
+        const dx   = e.changedTouches[0].clientX - state.sx;
+        const vel  = dx / Math.max(1, Date.now() - state.startTime);
+        state.active = false;
+        const n = _TAB_ORDER.length;
+        let nextIdx = state.index;
+        const THR = window.innerWidth * 0.3;
+        if ((dx < -THR || vel < -0.3) && state.index < n - 1) nextIdx = state.index + 1;
+        else if ((dx > THR || vel > 0.3) && state.index > 0)  nextIdx = state.index - 1;
+        _pagerSetIndex(nextIdx, true);
+        if (nextIdx !== state.index) {
+            state.index = nextIdx;
+            switchTab(_TAB_ORDER[nextIdx]);
+        }
+    }, { passive: true });
 
-    // 来るタブを画面外に配置（absolute）
-    toEl.style.cssText = [
-        'display:block', 'position:absolute', 'top:0', 'left:0',
-        `width:${W}px`, `height:${H}px`, 'overflow-y:auto',
-        `transform:translateX(${direction === 'left' ? W : -W}px)`,
-        'transition:none', 'z-index:2',
-    ].join(';');
-
-    // 現タブは normal flow のまま transform のみ
-    fromEl.style.position  = 'relative';
-    fromEl.style.zIndex    = '1';
-    fromEl.style.transform = 'translateX(0)';
-    fromEl.style.transition = 'none';
-
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-        toEl.style.transition   = `transform ${dur}ms ${ease}`;
-        fromEl.style.transition = `transform ${dur}ms ${ease}`;
-        toEl.style.transform    = 'translateX(0)';
-        // 旧タブは少し奥へ（iOS パララックス）
-        fromEl.style.transform  = `translateX(${direction === 'left' ? -Math.round(W * 0.28) : Math.round(W * 0.28)}px)`;
-
-        setTimeout(() => {
-            [fromEl, toEl].forEach(el => el.removeAttribute('style'));
-            container.style.overflow = '';
-            _tabAnimating = false;
-            switchTab(toId);
-        }, dur + 20);
-    }));
+    // 初期位置を確定（アニメなし）
+    _pagerSetIndex(state.index, false);
 }
 
 async function refreshActiveTab() {
@@ -540,6 +519,10 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelector(`.tab-nav-item[data-tab="${tabId}"]`).classList.add('active');
     document.getElementById(`tab-${tabId}`).classList.add('active');
+
+    // ページャーをタブ位置へスライド
+    const _pidx = _TAB_ORDER.indexOf(tabId);
+    if (_pidx >= 0) { _tabPager.index = _pidx; _pagerSetIndex(_pidx, true); }
 
     // スワイプを閉じる
     closeAllSwipeRows();

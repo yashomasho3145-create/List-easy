@@ -147,8 +147,11 @@ body {
     border-top: 1px solid rgba(13, 27, 42, 0.1);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     order: 2;
+    position: relative;
 }
-.tab-contents { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; order: 1; position: relative; }
+/* === Xスタイルページャーコンテナ === */
+.tab-pager-outer { flex: 1; order: 1; overflow: hidden; position: relative; min-height: 0; }
+.tab-contents { display: flex; flex-direction: row; width: 300%; height: 100%; will-change: transform; }
 .tab-nav-item {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
@@ -189,19 +192,25 @@ body {
 @keyframes toastFadeIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 @keyframes toastFadeOut { from { opacity: 1; } to { opacity: 0; } }
 
-/* === タブコンテンツ === */
-.tab-content { display: none; animation: fadeIn 0.3s ease; }
-.tab-content.active { display: block; }
+/* === タブコンテンツ（Xスタイルページャー） === */
+.tab-content { display: flex !important; flex-direction: column; width: 33.333%; flex-shrink: 0; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .tab-content header { position: sticky; top: 0; z-index: 10; }
 .tab-content main { padding-bottom: 20px; }
-#tab-status {
-    min-height: 100%;
+#tab-status { min-height: 100%; }
+#tab-status main { min-height: calc(100% - 60px); padding-bottom: 40px; }
+
+/* === タブインジケーターライン === */
+.tab-nav-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2.5px;
+    width: 33.333%;
+    background: var(--energy-orange);
+    border-radius: 0 0 3px 3px;
+    transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
+    pointer-events: none;
 }
-#tab-status main {
-    min-height: calc(100% - 60px);
-    padding-bottom: 40px;
-}
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* === ヘッダー === */
 header { position: sticky; top: 0; background: var(--bg-card); border-bottom: 1px solid rgba(13, 27, 42, 0.08); z-index: 10; }
