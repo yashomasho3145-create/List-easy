@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=20260701c">
+    <link rel="stylesheet" href="css/style.css?v=20260701d">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
@@ -296,12 +296,19 @@
                 <div class="journal-fs-header-center" id="journalEditDate"></div>
                 <button class="journal-fs-save-btn" id="journalSaveEditBtn">残す</button>
             </div>
+            <!-- エディターツールバー -->
+            <div class="journal-ed-toolbar" id="journalEdToolbar">
+                <button class="journal-ed-tool-btn" id="journalToolAchieve">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    達成タスク
+                </button>
+            </div>
+            <!-- 達成タスクパネル（ツールバーボタンで開閉） -->
+            <div class="journal-achieve-panel" id="journalAchievePanel" style="display:none;">
+                <div class="journal-achieve-chips" id="journalAchieveChips"></div>
+            </div>
             <div class="journal-fs-edit-body">
                 <textarea class="journal-fs-content-input" id="editJournalText" placeholder="1行目がタイトルになります…"></textarea>
-                <div id="journalEdChipsBar" class="journal-ed-chips-bar" style="display:none;">
-                    <div class="journal-ed-chips-label">今日の達成（タップで挿入）</div>
-                    <div class="journal-ed-chips" id="journalEdChips"></div>
-                </div>
             </div>
         </div>
     </div>
@@ -732,16 +739,16 @@
     </nav>
 
     <!-- JavaScript読み込み（順序重要）-->
-    <script src="js/config.js?v=20260701c"></script>
-    <script src="js/swipe.js?v=20260701c"></script>
-    <script src="js/api.js?v=20260701c"></script>
-    <script src="js/task.js?v=20260701c"></script>
-    <script src="js/habit.js?v=20260701c"></script>
-    <script src="js/journal.js?v=20260701c"></script>
-    <script src="js/msc.js?v=20260701c"></script>
-    <script src="js/modal.js?v=20260701c"></script>
-    <script src="js/developer.js?v=20260701c"></script>
-    <script src="js/app.js?v=20260701c"></script>
-    <script src="js/tree.js?v=20260701c"></script>
+    <script src="js/config.js?v=20260701d"></script>
+    <script src="js/swipe.js?v=20260701d"></script>
+    <script src="js/api.js?v=20260701d"></script>
+    <script src="js/task.js?v=20260701d"></script>
+    <script src="js/habit.js?v=20260701d"></script>
+    <script src="js/journal.js?v=20260701d"></script>
+    <script src="js/msc.js?v=20260701d"></script>
+    <script src="js/modal.js?v=20260701d"></script>
+    <script src="js/developer.js?v=20260701d"></script>
+    <script src="js/app.js?v=20260701d"></script>
+    <script src="js/tree.js?v=20260701d"></script>
 </body>
 </html>

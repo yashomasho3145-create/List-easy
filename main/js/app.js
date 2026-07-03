@@ -351,25 +351,32 @@ function initPullToRefresh() {
     }, { passive: true });
 }
 
+let _tabAnimating = false;
+
 /**
- * タブ間スワイプ移動
+ * タブ間スワイプ移動（画面端のみ発動 · iOS スライドアニメ）
  */
 function initTabSwipe() {
     const TAB_ORDER = ['list', 'status', 'journal'];
-    const THRESHOLD = 70;
+    const EDGE_ZONE = 28;  // 画面端からこのpx以内のみ発動
+    const THRESHOLD = 52;  // 発動に必要な最小ドラッグ距離
     const container = document.querySelector('.tab-contents');
     if (!container) return;
 
     let sx = 0, sy = 0, locked = null, active = false;
 
     container.addEventListener('touchstart', e => {
-        if (e.touches.length !== 1) return;
-        // journal-swipe-wrap の中から始まるスワイプは除外
-        if (e.target.closest('.journal-swipe-wrap, .template-carousel, canvas')) return;
-        sx = e.touches[0].clientX;
-        sy = e.touches[0].clientY;
-        locked = null;
-        active = true;
+        if (_tabAnimating || e.touches.length !== 1) return;
+        if (document.querySelector('.journal-fullscreen-modal.visible')) return;
+        if (document.querySelector('.modal-root.visible')) return;
+        if (window._treeViewActive) return;
+
+        const tx = e.touches[0].clientX;
+        const W  = window.innerWidth;
+        if (tx > EDGE_ZONE && tx < W - EDGE_ZONE) return; // 端以外は無視
+
+        sx = tx; sy = e.touches[0].clientY;
+        locked = null; active = true;
     }, { passive: true });
 
     container.addEventListener('touchmove', e => {
@@ -377,7 +384,7 @@ function initTabSwipe() {
         const dx = e.touches[0].clientX - sx;
         const dy = e.touches[0].clientY - sy;
         if (locked === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-            locked = Math.abs(dx) > Math.abs(dy) * 1.1 ? 'h' : 'v';
+            locked = Math.abs(dx) > Math.abs(dy) * 0.75 ? 'h' : 'v';
         }
         if (locked === 'v') active = false;
     }, { passive: true });
@@ -387,17 +394,73 @@ function initTabSwipe() {
         const dx = e.changedTouches[0].clientX - sx;
         active = false;
         if (Math.abs(dx) < THRESHOLD) return;
-        if (document.querySelector('.journal-fullscreen-modal.visible')) return;
-        if (document.querySelector('.modal-root.visible, .mbti-modal.visible')) return;
-        if (window._treeViewActive) return;
+
+        const isLeft  = sx < EDGE_ZONE;          // 左端から開始
+        const isRight = sx > window.innerWidth - EDGE_ZONE; // 右端から開始
+        const goLeft  = dx < 0;                  // 指が左へ移動 = 次タブ
+
+        if (isLeft  &&  goLeft) return; // 左端から左スワイプは無効
+        if (isRight && !goLeft) return; // 右端から右スワイプは無効
 
         const curTab = document.querySelector('.tab-nav-item.active')?.dataset.tab;
         const curIdx = TAB_ORDER.indexOf(curTab);
         if (curIdx < 0) return;
-        const nextIdx = dx < 0 ? curIdx + 1 : curIdx - 1;
+        const nextIdx = goLeft ? curIdx + 1 : curIdx - 1;
         if (nextIdx < 0 || nextIdx >= TAB_ORDER.length) return;
-        if (typeof switchTab === 'function') switchTab(TAB_ORDER[nextIdx]);
+
+        _switchTabAnimated(curTab, TAB_ORDER[nextIdx], goLeft ? 'left' : 'right');
     }, { passive: true });
+}
+
+/**
+ * iOS風タブスライドアニメーション
+ */
+function _switchTabAnimated(fromId, toId, direction) {
+    if (_tabAnimating) return;
+    _tabAnimating = true;
+
+    const container = document.querySelector('.tab-contents');
+    const fromEl    = document.getElementById(`tab-${fromId}`);
+    const toEl      = document.getElementById(`tab-${toId}`);
+    if (!fromEl || !toEl || !container) {
+        _tabAnimating = false; switchTab(toId); return;
+    }
+
+    const W    = container.offsetWidth;
+    const H    = container.offsetHeight;
+    const ease = 'cubic-bezier(0.32,0.72,0,1)';
+    const dur  = 310;
+
+    container.style.overflow = 'hidden'; // スクロール抑制
+
+    // 来るタブを画面外に配置（absolute）
+    toEl.style.cssText = [
+        'display:block', 'position:absolute', 'top:0', 'left:0',
+        `width:${W}px`, `height:${H}px`, 'overflow-y:auto',
+        `transform:translateX(${direction === 'left' ? W : -W}px)`,
+        'transition:none', 'z-index:2',
+    ].join(';');
+
+    // 現タブは normal flow のまま transform のみ
+    fromEl.style.position  = 'relative';
+    fromEl.style.zIndex    = '1';
+    fromEl.style.transform = 'translateX(0)';
+    fromEl.style.transition = 'none';
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        toEl.style.transition   = `transform ${dur}ms ${ease}`;
+        fromEl.style.transition = `transform ${dur}ms ${ease}`;
+        toEl.style.transform    = 'translateX(0)';
+        // 旧タブは少し奥へ（iOS パララックス）
+        fromEl.style.transform  = `translateX(${direction === 'left' ? -Math.round(W * 0.28) : Math.round(W * 0.28)}px)`;
+
+        setTimeout(() => {
+            [fromEl, toEl].forEach(el => el.removeAttribute('style'));
+            container.style.overflow = '';
+            _tabAnimating = false;
+            switchTab(toId);
+        }, dur + 20);
+    }));
 }
 
 async function refreshActiveTab() {

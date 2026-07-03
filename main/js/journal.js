@@ -549,30 +549,11 @@ function openNewJournalEditor(opts = {}) {
     document.getElementById('journalViewContent').style.display = 'none';
     document.getElementById('journalEditContent').style.display = '';
     document.getElementById('journalDetailModal').classList.add('visible');
-    _showJournalEdChips();
-}
-
-function _showJournalEdChips() {
-    const bar = document.getElementById('journalEdChipsBar');
-    if (!bar) return;
-    const done = window._completedTasksForJournal || [];
-    if (!done.length) { bar.style.display = 'none'; return; }
-    const chipsEl = document.getElementById('journalEdChips');
-    if (chipsEl) {
-        chipsEl.innerHTML = done.map(t => {
-            const name = _escJ(t.task_name || t.title || t.name || '');
-            return name ? `<button class="journal-ed-chip" data-name="${name}">${name}</button>` : '';
-        }).filter(Boolean).join('');
-        chipsEl.querySelectorAll('.journal-ed-chip').forEach(ch => {
-            ch.onclick = () => {
-                const ta = document.getElementById('editJournalText');
-                if (!ta) return;
-                ta.value += (ta.value && !ta.value.endsWith('\n') ? '\n' : '') + '・' + ch.dataset.name;
-                ta.focus();
-            };
-        });
-    }
-    bar.style.display = '';
+    // 達成パネルを閉じた状態でリセット
+    const ap = document.getElementById('journalAchievePanel');
+    const tb = document.getElementById('journalToolAchieve');
+    if (ap) ap.style.display = 'none';
+    if (tb) tb.classList.remove('active');
 }
 
 /* ─────────────────────────────────────────────
@@ -684,8 +665,10 @@ function bindJournalDetailModalUI() {
 
         document.getElementById('journalViewContent').style.display = 'none';
         document.getElementById('journalEditContent').style.display = '';
-        const chipsBar = document.getElementById('journalEdChipsBar');
-        if (chipsBar) chipsBar.style.display = 'none';
+        const ap = document.getElementById('journalAchievePanel');
+        const tb = document.getElementById('journalToolAchieve');
+        if (ap) ap.style.display = 'none';
+        if (tb) tb.classList.remove('active');
         setTimeout(() => document.getElementById('editJournalText').focus(), 80);
     };
 
@@ -725,6 +708,39 @@ function bindJournalDetailModalUI() {
             }
         } catch (e) { showToast('保存に失敗しました', 'error'); }
     };
+
+    // ── エディタツールバー ──
+    const toolAchieve   = document.getElementById('journalToolAchieve');
+    const achievePanel  = document.getElementById('journalAchievePanel');
+    const achieveChips  = document.getElementById('journalAchieveChips');
+    if (toolAchieve && achievePanel && achieveChips) {
+        toolAchieve.onclick = () => {
+            const done = window._completedTasksForJournal || [];
+            if (!done.length) { showToast('今日の達成記録がありません', 'info'); return; }
+            const isOpen = achievePanel.style.display !== 'none';
+            if (isOpen) {
+                achievePanel.style.display = 'none';
+                toolAchieve.classList.remove('active');
+                return;
+            }
+            achieveChips.innerHTML = done.map(t => {
+                const name = _escJ(t.task_name || t.title || t.name || '');
+                return name ? `<button class="journal-ed-chip" data-name="${name}">${name}</button>` : '';
+            }).filter(Boolean).join('');
+            achieveChips.querySelectorAll('.journal-ed-chip').forEach(ch => {
+                ch.onclick = () => {
+                    const ta = document.getElementById('editJournalText');
+                    if (!ta) return;
+                    ta.value += (ta.value && !ta.value.endsWith('\n') ? '\n' : '') + '・' + ch.dataset.name;
+                    ta.focus();
+                    achievePanel.style.display = 'none';
+                    toolAchieve.classList.remove('active');
+                };
+            });
+            achievePanel.style.display = '';
+            toolAchieve.classList.add('active');
+        };
+    }
 
     // ── FAB ──
     const fab = document.getElementById('journalFab');
