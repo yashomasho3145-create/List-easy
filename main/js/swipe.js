@@ -420,6 +420,7 @@ class SwipeableRow {
     // === フルスワイプ飛び出し + カード潰しアニメーション ===
     _flyOff(targetX, actionType) {
         let started = false;
+        if (typeof haptic === 'function') haptic(14);
 
         // アクション側のボタンを横いっぱいに広げ、副ボタンを完全に潰す
         const isLeft = targetX > 0;

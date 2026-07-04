@@ -317,6 +317,29 @@
 
             drawStar(x, y, baseR, rgb, bright, tw, isCore, n.done, isIdle);
 
+            /* 移動直後のパルスリング */
+            if (n._pulseT0) {
+                const age = (now - n._pulseT0) / 1000;
+                if (age > 1.6) {
+                    n._pulseT0 = 0;
+                } else {
+                    const k = age / 1.6;
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.strokeStyle = 'rgba(' + PAL.quest + ',' + (0.85 * (1 - k)) + ')';
+                    ctx.lineWidth = 2.2 * (1 - k * 0.6);
+                    ctx.beginPath(); ctx.arc(x, y, baseR + 5 + k * 46, 0, 6.2832); ctx.stroke();
+                    /* 2本目の遅れリング */
+                    if (k > 0.25) {
+                        const k2 = (k - 0.25) / 0.75;
+                        ctx.strokeStyle = 'rgba(' + PAL.quest + ',' + (0.5 * (1 - k2)) + ')';
+                        ctx.lineWidth = 1.4;
+                        ctx.beginPath(); ctx.arc(x, y, baseR + 5 + k2 * 34, 0, 6.2832); ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+            }
+
             /* コアリング */
             if (isCore) {
                 const pulse = 0.5 + 0.5*Math.sin(t*1.2 + (n._ph||0));
@@ -487,6 +510,7 @@
             '<button id="cz-del" style="width:100%;padding:12px;border:1px solid rgba(255,80,60,0.3);border-radius:14px;background:transparent;color:rgba(255,100,80,0.8);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">削除</button>';
 
         sheetEl.querySelector('#cz-ok') && sheetEl.querySelector('#cz-ok').addEventListener('click', async () => {
+            haptic(12);
             closeSheet();
             await action('complete', n._apiData.id);
             _tasksCache = null;
@@ -543,11 +567,21 @@
     }
 
     /* -------- データ読み込み -------- */
+    let focusAfterBuild = null; // 再構築後にフォーカス＆パルスさせるノードID
     async function refreshTree() {
         try {
             const data = await apiCall('/tasks/tree?user_id=' + encodeURIComponent(userId));
             if (!data || !data.length) { nodes=[]; edges=[]; return; }
             buildGraph(data);
+            if (focusAfterBuild) {
+                const n = nodes.find(x => x.id === focusAfterBuild);
+                focusAfterBuild = null;
+                if (n) {
+                    n._pulseT0 = performance.now();
+                    fitting = true;
+                    fitTo = { cx: n.wx, cy: n.wy, z: Math.max(0.9, cam.zoom) };
+                }
+            }
         } catch(e) {
             console.error('[constellation] load error:', e);
         }
@@ -662,7 +696,9 @@
                 user_id: userId, action: 'reparent',
                 task_id: Number(taskId), parent_task_id: parentId,
             });
+            haptic(12);
             _tasksCache = null;
+            focusAfterBuild = String(taskId);   // 移動先でパルス＆フォーカス
             refreshTree();
             if (typeof showToast === 'function') {
                 const dest = target.type === 'core' ? 'トップ階層' : `「${target.name}」の下`;

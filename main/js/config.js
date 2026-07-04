@@ -54,6 +54,11 @@ const SWIPE_CONFIG = {
 const STRONG_RATIO = SWIPE_CONFIG.FULL_SWIPE_RATIO;
 const SNAP_THRESHOLD = 40; // 後方互換用
 
+// === ハプティクス（対応端末のみ振動・非対応は無視） ===
+function haptic(ms = 8) {
+    try { if (navigator.vibrate) navigator.vibrate(ms); } catch (_) {}
+}
+
 // === 習慣リスト ===
 const HABITS = [
     { id: 'early_wake', name: '早起き', icon: '🌅' },

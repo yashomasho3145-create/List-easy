@@ -253,6 +253,17 @@ header { position: sticky; top: 0; background: var(--bg-card); border-bottom: 1p
 /* === リストタブ === */
 .list { display: flex; flex-direction: column; }
 
+/* === 空状態 === */
+.list-empty-state {
+    text-align: center;
+    padding: 56px 24px 40px;
+    animation: emptyFadeUp 0.45s cubic-bezier(0.32,0.72,0,1);
+}
+.list-empty-state .empty-emoji { font-size: 44px; margin-bottom: 14px; }
+.list-empty-state .empty-title { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.list-empty-state .empty-sub { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+@keyframes emptyFadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
 /* === カード基本スタイル === */
 .card {
     position: relative;

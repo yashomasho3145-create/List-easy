@@ -30,6 +30,7 @@ function renderHabitList(habits) {
                 e.stopPropagation();
                 const id = item.dataset.habit;
                 const cb = item.querySelector('.habit-checkbox');
+                haptic(8);
                 todayHabits[id] = !todayHabits[id];
                 cb.classList.toggle('checked', todayHabits[id]);
                 cb.textContent = todayHabits[id] ? '✓' : '';
@@ -57,6 +58,7 @@ function renderHabitList(habits) {
                 e.stopPropagation();
                 const id = item.dataset.habit;
                 const cb = item.querySelector('.habit-checkbox');
+                haptic(8);
                 todayHabits[id] = !todayHabits[id];
                 cb.classList.toggle('checked', todayHabits[id]);
                 cb.textContent = todayHabits[id] ? '✓' : '';

@@ -308,6 +308,7 @@ function initGestureCoordinator() {
         _g.t0 = Date.now();
         _g.lock = null;
         _g.active = true;
+        _g.ptrReady = false;
         ptrY = 0;
     }, { passive: true });
 
@@ -344,7 +345,10 @@ function initGestureCoordinator() {
             const progress = clamped / PULL_THR;
             if (ptr) ptr.style.transition = 'none';
             setPtr(clamped, progress, progress >= 1 ? '放して更新 ↑' : '引っ張って更新');
-            if (ptr) ptr.classList.toggle('ptr-ready', progress >= 1);
+            const ready = progress >= 1;
+            if (ready && !_g.ptrReady) haptic(8);   // 発動ラインを越えた瞬間に一度だけ
+            _g.ptrReady = ready;
+            if (ptr) ptr.classList.toggle('ptr-ready', ready);
             if (e.cancelable) e.preventDefault();
         }
         // 'scroll': ネイティブスクロールに委ねる（何もしない）
@@ -506,6 +510,9 @@ function switchTab(tabId) {
         showUpgradeModal('ジャーナル機能');
         return false;
     }
+
+    const _wasActive = document.querySelector('.tab-nav-item.active')?.dataset.tab;
+    if (_wasActive !== tabId) haptic(6);
 
     document.querySelectorAll('.tab-nav-item').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));

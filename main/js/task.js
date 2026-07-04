@@ -75,6 +75,22 @@ function renderList(payload) {
     if (questCountEl)  questCountEl.textContent  = quest.length  > 0 ? `${quest.length}`  : '';
     if (taskCountEl)   taskCountEl.textContent   = tasks.length  > 0 ? `${tasks.length}`  : '';
 
+    // 空状態（今ユーザーに必要な一言だけ）
+    let emptyEl = document.getElementById('listEmptyState');
+    if (allActive.length === 0) {
+        if (!emptyEl) {
+            emptyEl = document.createElement('div');
+            emptyEl.id = 'listEmptyState';
+            emptyEl.className = 'list-empty-state';
+            taskEl.parentElement.insertBefore(emptyEl, taskEl.nextSibling);
+        }
+        emptyEl.innerHTML = completed.length > 0
+            ? '<div class="empty-emoji">🎉</div><div class="empty-title">すべて完了！</div><div class="empty-sub">今日もムキムキだ。ゆっくり休もう</div>'
+            : '<div class="empty-emoji">💪</div><div class="empty-title">最初のタスクを追加しよう</div><div class="empty-sub">下の入力欄からすぐ追加できるよ</div>';
+    } else if (emptyEl) {
+        emptyEl.remove();
+    }
+
     // ジャーナル用に今日の達成タスクを保持
     window._completedTasksForJournal = completed;
 
@@ -163,14 +179,34 @@ function createTaskCard(t, isCompleted, priority) {
     checkBtn.addEventListener('click', e => {
         e.stopPropagation();
         e.preventDefault();
+        if (isCompleted) {
+            if (checkTaskLimit()) { haptic(8); action('uncomplete', t.id); }
+            return;
+        }
+        if (wrap._completing) return;
+        wrap._completing = true;
+        haptic(12);
+
+        // ① チェックを即座に点灯（Things風の即応）
+        checkBtn.innerHTML = _filledCheckSvg('#34c759');
         checkBtn.style.animation = 'none';
         void checkBtn.offsetHeight;
         checkBtn.style.animation = 'czCheckPop .28s cubic-bezier(.32,.72,0,1)';
-        if (isCompleted) {
-            if (checkTaskLimit()) action('uncomplete', t.id);
-        } else {
-            action('complete', t.id);
-        }
+
+        // ② ひと呼吸おいてカードが滑り出て閉じる → ③ 楽観的更新
+        setTimeout(() => {
+            const h = wrap.offsetHeight;
+            wrap.style.height = h + 'px';
+            wrap.style.minHeight = '0';
+            wrap.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                wrap.style.transition = 'height .3s cubic-bezier(.32,.72,0,1), opacity .26s ease, transform .3s cubic-bezier(.32,.72,0,1)';
+                wrap.style.height = '0';
+                wrap.style.opacity = '0';
+                wrap.style.transform = 'translateX(32px)';
+            });
+            setTimeout(() => action('complete', t.id), 310);
+        }, 330);
     });
 
     // コンテンツエリア（タイトル＋リマインド）
@@ -561,6 +597,8 @@ async function addTask() {
     if (!checkTaskLimit()) return;
 
     input.value = '';
+    input.focus();   // 連続追加できるようフォーカス維持
+    haptic(6);
 
     // 楽観的追加：即キャッシュに挿入してアニメ付きで表示
     const tempId = --_tempIdCounter;
