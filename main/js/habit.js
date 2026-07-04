@@ -46,7 +46,7 @@ function renderHabitList(habits) {
             return `<div class="habit-item" data-habit="${h.habit_id}">
                 <div class="habit-checkbox" data-habit="${h.habit_id}"></div>
                 <div class="habit-info">
-                    <span class="habit-name">${h.habit_name}</span>
+                    <span class="habit-name">${escapeHtml(h.habit_name)}</span>
                     ${streakHtml}
                 </div>
                 <span class="habit-icon">${h.icon || ''}</span>
@@ -141,7 +141,7 @@ function renderWeekView(habits, week) {
         // APIデータ（動的）
         tbody.innerHTML = habitList.map(h =>
             `<tr>
-                <td>${h.icon || ''} ${h.habit_name}</td>
+                <td>${h.icon || ''} ${escapeHtml(h.habit_name)}</td>
                 ${days.map(d =>
                     `<td class="${weekData[d]?.[h.habit_id] ? 'checked' : 'unchecked'}">
                         ${weekData[d]?.[h.habit_id] ? '●' : '○'}
@@ -223,7 +223,7 @@ function renderStreakBadges(habits) {
     }
     container.innerHTML = habits.map(h =>
         `<div class="streak-badge ${h.streak > 0 ? '' : 'streak-warning'}">
-            ${h.icon || ''} ${h.habit_name} 🔥${h.streak || 0}日
+            ${h.icon || ''} ${escapeHtml(h.habit_name)} 🔥${h.streak || 0}日
         </div>`
     ).join('');
 }

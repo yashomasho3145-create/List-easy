@@ -107,17 +107,16 @@ function applyCustomMscData() {
  */
 async function calculateMscFromHabits() {
     const now = new Date();
-    let allMonthlyData = [];
 
-    for (let i = 0; i < 3; i++) {
+    // 直近3ヶ月分を並列取得（直列awaitだと3倍待たされる）
+    const monthlyResults = await Promise.all([0, 1, 2].map(i => {
         const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const year = targetDate.getFullYear();
         const month = targetDate.getMonth() + 1;
-        try {
-            const data = await apiCall(`/habits/monthly?user_id=${encodeURIComponent(userId)}&year=${year}&month=${month}`);
-            if (data.monthly) allMonthlyData = allMonthlyData.concat(data.monthly);
-        } catch (e) {}
-    }
+        return apiCall(`/habits/monthly?user_id=${encodeURIComponent(userId)}&year=${year}&month=${month}`)
+            .catch(() => null);
+    }));
+    const allMonthlyData = monthlyResults.flatMap(d => d?.monthly || []);
 
     // カテゴリ別集計
     const categoryScores = {};

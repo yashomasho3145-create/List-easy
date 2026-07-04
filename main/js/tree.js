@@ -273,7 +273,19 @@
         });
         ctx.restore();
 
-        if (!nodes.length) return;
+        if (!nodes.length) {
+            /* 空の星空メッセージ */
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.font = '600 15px -apple-system,sans-serif';
+            ctx.fillStyle = 'rgba(233,238,255,0.85)';
+            ctx.fillText('まだ星がありません', W/2, H/2 - 12);
+            ctx.font = '12px -apple-system,sans-serif';
+            ctx.fillStyle = 'rgba(190,201,236,0.55)';
+            ctx.fillText('タスクを追加すると、あなたの星空が広がります', W/2, H/2 + 12);
+            ctx.restore();
+            return;
+        }
 
         const sp = new Map();
         nodes.forEach(n => sp.set(n.id, proj(n, t)));
@@ -408,7 +420,10 @@
             }
             lastTapT=nowT; lastTapXY=[sx,sy];
             const n = hitTest(sx, sy);
-            if (n) openSheet(n);
+            if (n) {
+                if (moveMode) { execMove(n); return; }
+                openSheet(n);
+            }
         } else {
             cam.vx=vel.x; cam.vy=vel.y;
         }
@@ -546,7 +561,7 @@
         treeView.style.display = '';
         if (addBar) addBar.style.display = 'none';
 
-        if (!cv) { initCanvas(); addFitBtn(); }
+        if (!cv) { initCanvas(); addFitBtn(); treeView.appendChild(moveBanner); }
         resize();
         if (animId) cancelAnimationFrame(animId);
         lastT = performance.now();
@@ -575,6 +590,7 @@
         window._treeViewActive = false;
         if (animId) { cancelAnimationFrame(animId); animId=null; }
         closeSheet();
+        exitMove();
         if (addBar) addBar.style.display = '';
         listView.style.display = '';
         treeView.style.display = 'none';
@@ -591,13 +607,83 @@
         showTree();
     });
 
+    /* -------- 移動モード -------- */
+    let moveMode = null; // { taskId, taskName }
+    const moveBanner = document.createElement('div');
+    moveBanner.style.cssText = [
+        'position:absolute;left:12px;right:12px;top:12px;z-index:20;display:none;',
+        'align-items:center;gap:10px;padding:12px 14px;border-radius:14px;',
+        'background:rgba(13,15,30,0.88);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);',
+        'border:1px solid rgba(255,159,67,0.35);color:#eef1ff;',
+        'font-family:-apple-system,sans-serif;font-size:13px;line-height:1.4;',
+        'box-shadow:0 8px 28px rgba(0,0,0,0.5);',
+    ].join('');
+
+    function enterMove(taskId, taskName) {
+        moveMode = { taskId: String(taskId), taskName };
+        moveBanner.innerHTML =
+            '<span style="font-size:18px;">🚀</span>' +
+            '<span style="flex:1;">「<b>' + escHtml(taskName) + '</b>」の移動先の星をタップ<br>' +
+            '<span style="color:rgba(190,200,235,0.65);font-size:11px;">中心の星をタップでトップ階層へ</span></span>' +
+            '<button id="cz-move-cancel" style="flex-shrink:0;padding:8px 14px;border:1px solid rgba(160,180,255,0.25);border-radius:10px;background:transparent;color:#eef1ff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">キャンセル</button>';
+        moveBanner.style.display = 'flex';
+        moveBanner.querySelector('#cz-move-cancel').addEventListener('click', exitMove);
+    }
+    function exitMove() {
+        moveMode = null;
+        moveBanner.style.display = 'none';
+    }
+
+    /* 移動先が自分自身/自分の子孫でないか確認（循環防止） */
+    function isDescendantOf(node, ancestorId) {
+        let p = node;
+        while (p) {
+            if (String(p.id) === ancestorId) return true;
+            p = p.parent;
+        }
+        return false;
+    }
+
+    async function execMove(target) {
+        if (!moveMode) return;
+        const { taskId, taskName } = moveMode;
+        if (String(target.id) === taskId) {
+            if (typeof showToast === 'function') showToast('自分自身へは移動できません', 'error');
+            return;
+        }
+        if (target.type !== 'core' && isDescendantOf(target, taskId)) {
+            if (typeof showToast === 'function') showToast('自分の配下へは移動できません', 'error');
+            return;
+        }
+        const parentId = target.type === 'core' ? null : Number(target.id);
+        exitMove();
+        try {
+            await apiCall('/tasks/action', 'POST', {
+                user_id: userId, action: 'reparent',
+                task_id: Number(taskId), parent_task_id: parentId,
+            });
+            _tasksCache = null;
+            refreshTree();
+            if (typeof showToast === 'function') {
+                const dest = target.type === 'core' ? 'トップ階層' : `「${target.name}」の下`;
+                showToast(`🚀 「${taskName}」を${dest}へ移動しました`, 'success');
+            }
+        } catch (e) {
+            console.error('[constellation] move error:', e);
+            const msg = String(e).includes('MAX_DEPTH') ? '階層が深すぎるため移動できません' : '移動に失敗しました';
+            if (typeof showToast === 'function') showToast(msg, 'error');
+        }
+    }
+
     /* -------- 公開API -------- */
     window.refreshTreeIfVisible = () => {
         if (treeView && treeView.style.display !== 'none') refreshTree();
     };
     window.enterMoveMode = (taskId, taskName) => {
+        // リスト側のカードの持ち上げ表示を解除
+        document.querySelectorAll('.card-lifted').forEach(c => c.classList.remove('card-lifted'));
         btnTree.click();
-        if (typeof showToast === 'function') showToast('ツリービューで移動先のクエストをタップしてください');
+        enterMove(taskId, taskName);
     };
 
 })();

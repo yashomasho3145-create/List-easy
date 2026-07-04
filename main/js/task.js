@@ -573,9 +573,9 @@ async function addTask() {
         renderList(_tasksCache);
     }
 
-    // バックグラウンドでAPIを叩く
+    // バックグラウンドでAPIを叩く（レスポンスの最新リストをそのまま反映＝再取得なし）
     apiCall('/tasks/action', 'POST', { user_id: userId, action: 'create', task_name: title })
-        .then(() => { _tasksCache = null; loadList(true); })
+        .then(list => adoptTaskList(list))
         .catch(e => {
             console.error('[addTask] error:', e);
             if (_tasksCache) {
@@ -740,19 +740,22 @@ async function renderBubbleUpSubtasks(rootId, container, silent = false) {
 async function collectLeafItems(parentId, items, depth) {
     const data = await apiCall(`/tasks/subtasks?user_id=${encodeURIComponent(userId)}&parent_id=${parentId}`);
     const incomplete = (data || []).filter(t => t.complete_at !== 1);
-    for (const task of incomplete) {
+    // 枝ごとに並列取得し、表示順は元の順序を維持
+    const branches = await Promise.all(incomplete.map(async task => {
         if (task.subtask_count === 0) {
             // 末端（純粋な葉 or バブルアップ済み）
-            items.push({
+            return [{
                 task,
                 leftBadge: depth > 0 ? depth : null,   // 直下は数字なし、孫以降は中間数を表示
                 rightBadge: task.completed_subtask_count || null,
-            });
-        } else {
-            // 未完了の子がいる → 再帰
-            await collectLeafItems(task.id, items, depth + 1);
+            }];
         }
-    }
+        // 未完了の子がいる → 再帰
+        const sub = [];
+        await collectLeafItems(task.id, sub, depth + 1);
+        return sub;
+    }));
+    branches.forEach(b => items.push(...b));
 }
 
 /**

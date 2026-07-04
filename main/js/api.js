@@ -27,11 +27,12 @@ async function apiCall(endpoint, method = 'GET', body = null) {
  */
 async function action(kind, id, extra = {}) {
     const OPTIMISTIC = ['complete', 'uncomplete', 'delete'];
+    const req = apiCall('/tasks/action', 'POST', { user_id: userId, action: kind, task_id: id, ...extra });
+
     if (OPTIMISTIC.includes(kind) && _tasksCache) {
         const snapshot = JSON.parse(JSON.stringify(_tasksCache));
         _applyOptimisticUpdate(kind, id);
-        apiCall('/tasks/action', 'POST', { user_id: userId, action: kind, task_id: id, ...extra })
-            .then(() => { _tasksCache = null; loadList(true); })
+        req.then(list => adoptTaskList(list))
             .catch(e => {
                 console.error("[ACTION] error:", e);
                 _tasksCache = snapshot;
@@ -41,13 +42,26 @@ async function action(kind, id, extra = {}) {
         return;
     }
     try {
-        await apiCall('/tasks/action', 'POST', { user_id: userId, action: kind, task_id: id, ...extra });
-        _tasksCache = null;
+        // /tasks/action は更新済みリストを返すため、再取得の往復を省略
+        adoptTaskList(await req);
     } catch (e) {
         console.error("[ACTION] error:", e);
         showToast('操作に失敗しました', 'error');
-    } finally {
         if (kind !== "remind_custom") loadList(true);
+    }
+}
+
+/**
+ * /tasks/action のレスポンス（最新タスクリスト）をキャッシュへ反映して描画
+ */
+function adoptTaskList(list) {
+    if (list && (Array.isArray(list.critical) || Array.isArray(list.active) || Array.isArray(list.completed))) {
+        _tasksCache = list;
+        _tasksCacheTs = Date.now();
+        renderList(list);
+    } else {
+        _tasksCache = null;
+        loadList(true);
     }
 }
 

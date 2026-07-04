@@ -126,7 +126,7 @@
 
 /* === リセット・ベース === */
 * { box-sizing: border-box; }
-html { height: 100dvh; margin: 0; overflow: hidden; background: var(--bg-main); }
+html { height: 100dvh; margin: 0; overflow: hidden; background: var(--bg-main); overscroll-behavior: none; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
     background: var(--bg-main);
@@ -164,7 +164,8 @@ body {
 .tab-nav-item.active { color: var(--energy-orange); font-weight: 700; }
 .tab-nav-item.active::before, .tab-nav-item.active::after { display: none; }
 .tab-icon { width: 26px; height: 26px; object-fit: contain; opacity: 0.5; transition: opacity 0.2s ease, transform 0.2s ease; }
-.tab-nav-item.active .tab-icon { opacity: 1; transform: scale(1.1); }
+.tab-nav-item.active .tab-icon { opacity: 1; transform: scale(1.1); animation: tabIconPop 0.36s cubic-bezier(0.32,0.72,0,1); }
+@keyframes tabIconPop { 0% { transform: scale(1); } 45% { transform: scale(1.24); } 100% { transform: scale(1.1); } }
 @keyframes tabIconBounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
 @keyframes czRowIn { from { opacity: 0; transform: translateY(-10px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes czCheckPop { 0% { transform: scale(1); } 45% { transform: scale(1.32); } 100% { transform: scale(1); } }

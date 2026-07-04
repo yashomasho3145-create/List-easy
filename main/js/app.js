@@ -359,12 +359,15 @@ function initGestureCoordinator() {
             const dx  = e.changedTouches[0].clientX - _g.sx;
             const vel = dx / Math.max(1, Date.now() - _g.t0);
             const n   = _TAB_ORDER.length;
-            let nxt   = _tabPager.index;
+            const cur = _tabPager.index;
+            let nxt   = cur;
             const THR = window.innerWidth * 0.3;
-            if ((dx < -THR || vel < -0.3) && _tabPager.index < n - 1) nxt = _tabPager.index + 1;
-            else if ((dx > THR || vel > 0.3) && _tabPager.index > 0)  nxt = _tabPager.index - 1;
-            _pagerSetIndex(nxt, true);
-            if (nxt !== _tabPager.index) { _tabPager.index = nxt; switchTab(_TAB_ORDER[nxt]); }
+            if ((dx < -THR || vel < -0.3) && cur < n - 1) nxt = cur + 1;
+            else if ((dx > THR || vel > 0.3) && cur > 0)  nxt = cur - 1;
+            // switchTab がロック等で拒否したら元の位置へスナップバック
+            if (nxt === cur || switchTab(_TAB_ORDER[nxt]) !== true) {
+                _pagerSetIndex(cur, true);
+            }
             return;
         }
 
@@ -429,9 +432,9 @@ function _pagerSetProgress(idx, dx) {
 
 async function refreshActiveTab() {
     const activeTab = document.querySelector('.tab-nav-item.active')?.dataset.tab;
-    if (activeTab === 'list') await loadList();
-    else if (activeTab === 'status') { await loadHabits(); await loadMscData(); }
-    else if (activeTab === 'journal') await loadJournals();
+    if (activeTab === 'list') await loadList(true);
+    else if (activeTab === 'status') { _tabLoadTs.status = Date.now(); await Promise.all([loadHabits(), loadMscData()]); }
+    else if (activeTab === 'journal') { _tabLoadTs.journal = Date.now(); await loadJournals(); }
 }
 
 function updateThemeBtn(theme) {
@@ -481,11 +484,15 @@ function showGroupLockToast() {
     setTimeout(() => toast.remove(), 2500);
 }
 
+// タブ別データ鮮度（過剰なAPI再取得を防ぐ）
+const _tabLoadTs = { status: 0, journal: 0 };
+const TAB_DATA_TTL = 60000;
+
 function switchTab(tabId) {
     // グループモード：ステータス/ジャーナルはロック
     if (isGroupContext && (tabId === 'status' || tabId === 'journal')) {
         showGroupLockToast();
-        return;
+        return false;
     }
 
     // gating_enabled が true の場合のみ権限チェック
@@ -493,11 +500,11 @@ function switchTab(tabId) {
 
     if (gatingOn && tabId === 'status' && currentEntitlements && !currentEntitlements.can_status) {
         showUpgradeModal('ステータス機能');
-        return;
+        return false;
     }
     if (gatingOn && tabId === 'journal' && currentEntitlements && !currentEntitlements.can_journal) {
         showUpgradeModal('ジャーナル機能');
-        return;
+        return false;
     }
 
     document.querySelectorAll('.tab-nav-item').forEach(t => t.classList.remove('active'));
@@ -512,11 +519,19 @@ function switchTab(tabId) {
     // スワイプを閉じる
     closeAllSwipeRows();
 
-    // タブ切り替え時に自動データ読み込み
+    // タブ切り替え時に自動データ読み込み（TTL内はスキップして即表示）
     if (userId && userId !== 'demo_user') {
-        if (tabId === 'status') { loadHabits(); loadMscData(); }
-        if (tabId === 'journal') loadJournals();
+        const now = Date.now();
+        if (tabId === 'status' && now - _tabLoadTs.status > TAB_DATA_TTL) {
+            _tabLoadTs.status = now;
+            loadHabits(); loadMscData();
+        }
+        if (tabId === 'journal' && now - _tabLoadTs.journal > TAB_DATA_TTL) {
+            _tabLoadTs.journal = now;
+            loadJournals();
+        }
     }
+    return true;
 }
 
 /**
@@ -568,9 +583,11 @@ async function loadAllData() {
     // グループモードはステータス・ジャーナルをロードしない
     if (!isGroupContext) {
         if (currentEntitlements?.can_status) {
+            _tabLoadTs.status = Date.now();
             promises.push(loadHabits(), loadMscData());
         }
         if (currentEntitlements?.can_journal) {
+            _tabLoadTs.journal = Date.now();
             promises.push(loadJournals());
         }
     }
