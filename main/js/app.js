@@ -321,6 +321,11 @@ function initGestureCoordinator() {
 
         /* ── 方向確定（10px 以上動いてから一度だけ判断）── */
         if (_g.lock === null) {
+            // 上端で下方向ドラッグ中はネイティブのオーバースクロールを即ブロック
+            // （LINEアプリの「引き下げでLIFFを閉じる」誤発動を防ぐ）
+            if (dy > 0 && (document.querySelector('.tab-content.active')?.scrollTop ?? 0) <= 0) {
+                if (e.cancelable) e.preventDefault();
+            }
             if (absDx < 10 && absDy < 10) return;
             // カードスワイプと同じ閾値(LOCK_ANGLE_RATIO=1.2)で統一
             _g.lock = absDx > absDy * SWIPE_CONFIG.LOCK_ANGLE_RATIO
@@ -328,8 +333,9 @@ function initGestureCoordinator() {
                 : (dy > 0 && (document.querySelector('.tab-content.active')?.scrollTop ?? 0) === 0 ? 'ptr' : 'scroll');
         }
 
-        /* ── ページャー: ライブドラッグ ── */
+        /* ── ページャー: ライブドラッグ（縦スクロールは完全停止）── */
         if (_g.lock === 'pager') {
+            if (e.cancelable) e.preventDefault();
             const n = _TAB_ORDER.length;
             let cdx = dx;
             if (_tabPager.index === 0 && dx > 0) cdx = dx * 0.18;

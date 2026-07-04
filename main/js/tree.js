@@ -224,6 +224,52 @@
         ctx.restore();
     }
 
+    /* -------- エフェクト（光子・稲妻・流れ星・着弾スパーク） -------- */
+    let photons = [];       // エッジ上を流れる光の粒
+    let sparks  = [];       // 光子到着時のバースト
+    let bolt    = null;     // 稲妻
+    let meteor  = null;     // 流れ星
+    let nextBoltT = 0, nextMeteorT = 0;
+
+    function boltPoints(pa, pb, seed) {
+        const pts = [pa];
+        const dx = pb[0]-pa[0], dy = pb[1]-pa[1];
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy/len, ny = dx/len;
+        const SEG = 8;
+        for (let i = 1; i < SEG; i++) {
+            const t = i / SEG;
+            const amp = len * 0.09 * (1 - Math.abs(t - 0.5) * 1.2);
+            const o = rndS(seed + ':' + i) * amp;
+            pts.push([pa[0] + dx*t + nx*o, pa[1] + dy*t + ny*o]);
+        }
+        pts.push(pb);
+        return pts;
+    }
+    function strokePath(pts) {
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+        ctx.stroke();
+    }
+    function drawBolt(pa, pb, seed, a) {
+        const pts = boltPoints(pa, pb, seed);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(140,180,255,' + (0.22*a) + ')'; ctx.lineWidth = 4.5; strokePath(pts);
+        ctx.strokeStyle = 'rgba(235,245,255,' + (0.9*a)  + ')'; ctx.lineWidth = 1.3; strokePath(pts);
+        /* 分岐（フォーク） */
+        const m = pts[3] || pts[1];
+        let bx = m[0], by = m[1];
+        const branch = [[bx, by]];
+        for (let i = 1; i <= 3; i++) {
+            bx += rndS(seed + 'bx' + i) * 16 + 5;
+            by += rndS(seed + 'by' + i) * 16 + 5;
+            branch.push([bx, by]);
+        }
+        ctx.strokeStyle = 'rgba(180,210,255,' + (0.5*a) + ')'; ctx.lineWidth = 0.9; strokePath(branch);
+        ctx.restore();
+    }
+
     /* -------- アニメーションループ -------- */
     let lastT = performance.now();
     function draw(now) {
@@ -273,6 +319,32 @@
         });
         ctx.restore();
 
+        /* 流れ星 */
+        if (!meteor && now > nextMeteorT) {
+            const ang = Math.PI * (0.18 + Math.random() * 0.18);
+            const spd = 420 + Math.random() * 260;
+            meteor = { x: Math.random() * W * 0.8, y: -20,
+                       vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, t0: now, life: 1.1 };
+        }
+        if (meteor) {
+            const age = (now - meteor.t0) / 1000;
+            if (age > meteor.life) { nextMeteorT = now + 5200 + Math.random() * 6000; meteor = null; }
+            else {
+                const mx = meteor.x + meteor.vx * age, my = meteor.y + meteor.vy * age;
+                const fade = age < 0.15 ? age / 0.15 : (1 - age / meteor.life);
+                const vlen = Math.hypot(meteor.vx, meteor.vy);
+                const ux = meteor.vx / vlen, uy = meteor.vy / vlen;
+                const mg = ctx.createLinearGradient(mx, my, mx - ux*90, my - uy*90);
+                mg.addColorStop(0, 'rgba(255,255,255,' + (0.85*fade) + ')');
+                mg.addColorStop(1, 'rgba(160,190,255,0)');
+                ctx.save(); ctx.globalCompositeOperation = 'lighter';
+                ctx.strokeStyle = mg; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx - ux*90, my - uy*90); ctx.stroke();
+                glow(mx, my, 8, '220,235,255', 0.5*fade);
+                ctx.restore();
+            }
+        }
+
         if (!nodes.length) {
             /* 空の星空メッセージ */
             ctx.save();
@@ -300,6 +372,65 @@
             ctx.beginPath(); ctx.moveTo(pa[0],pa[1]); ctx.lineTo(pb[0],pb[1]); ctx.stroke();
         });
         ctx.restore();
+
+        /* ── 光子（エッジを流れるエネルギー粒） ── */
+        if (edges.length && photons.length < 12 && Math.random() < 0.09 * dt) {
+            const e = edges[(Math.random() * edges.length) | 0];
+            photons.push({
+                edge: e, t: 0,
+                spd: 0.35 + Math.random() * 0.5,
+                size: 1.3 + Math.random() * 1.5,
+                gold: e.b.done,
+            });
+        }
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        photons = photons.filter(p => {
+            const pa = sp.get(p.edge.a.id), pb = sp.get(p.edge.b.id);
+            if (!pa || !pb) return false;             // 再構築後の古いエッジは破棄
+            p.t += p.spd * dt / 60;
+            if (p.t >= 1) {
+                sparks.push({ x: pb[0], y: pb[1], t0: now, gold: p.gold });
+                return false;
+            }
+            const rgb = p.gold ? PAL.done : '150,190,255';
+            const zs  = Math.max(0.5, zoom);
+            for (let i = 3; i >= 0; i--) {            // 残像トレイル
+                const tt = Math.max(0, p.t - i * 0.022);
+                const x = pa[0] + (pb[0]-pa[0]) * tt;
+                const y = pa[1] + (pb[1]-pa[1]) * tt;
+                ctx.fillStyle = 'rgba(' + rgb + ',' + ((1 - i/4) * 0.65) + ')';
+                ctx.beginPath(); ctx.arc(x, y, p.size * (1 - i*0.18) * zs, 0, 6.2832); ctx.fill();
+            }
+            const hx = pa[0] + (pb[0]-pa[0]) * p.t, hy = pa[1] + (pb[1]-pa[1]) * p.t;
+            glow(hx, hy, p.size * 6 * zs, rgb, 0.45);
+            return true;
+        });
+
+        /* ── 着弾スパーク ── */
+        sparks = sparks.filter(s => {
+            const age = (now - s.t0) / 1000;
+            if (age > 0.5) return false;
+            const k = age / 0.5;
+            ctx.strokeStyle = 'rgba(' + (s.gold ? PAL.done : '170,200,255') + ',' + (0.8 * (1-k)) + ')';
+            ctx.lineWidth = 1.5 * (1 - k * 0.5);
+            ctx.beginPath(); ctx.arc(s.x, s.y, 2 + k * 14, 0, 6.2832); ctx.stroke();
+            return true;
+        });
+        ctx.restore();
+
+        /* ── 稲妻（ランダムなエッジに electricity が走る） ── */
+        if (!bolt && now > nextBoltT && edges.length) {
+            bolt = { edge: edges[(Math.random() * edges.length) | 0], t0: now, dur: 420, seed: (Math.random() * 1e4) | 0 };
+        }
+        if (bolt) {
+            const age = now - bolt.t0;
+            if (age > bolt.dur) { nextBoltT = now + 2600 + Math.random() * 3800; bolt = null; }
+            else {
+                const pa = sp.get(bolt.edge.a.id), pb = sp.get(bolt.edge.b.id);
+                if (pa && pb) drawBolt(pa, pb, bolt.seed + ((age / 55) | 0), 1 - age / bolt.dur);
+                else bolt = null;
+            }
+        }
 
         /* ノード */
         nodes.forEach(n => {

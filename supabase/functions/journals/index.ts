@@ -95,12 +95,18 @@ Deno.serve(async (req: Request) => {
     // POST /journals/update
     if (req.method === 'POST' && path.endsWith('/update')) {
       const body = await req.json();
-      const { id, user_id, title, content } = body;
+      const { id, user_id, title, content, is_favorite } = body;
       if (!id || !user_id) return errorResponse('id and user_id are required', 400);
+
+      // 渡されたフィールドだけを更新（お気に入りトグルで本文を壊さない）
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (title !== undefined) patch.title = title;
+      if (content !== undefined) patch.content = content;
+      if (is_favorite !== undefined) patch.is_favorite = !!is_favorite;
 
       const { data, error } = await supabase
         .from('journals')
-        .update({ title, content, updated_at: new Date().toISOString() })
+        .update(patch)
         .eq('id', id)
         .eq('user_id', user_id)
         .select('*')
